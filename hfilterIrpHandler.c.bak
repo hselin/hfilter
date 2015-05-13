@@ -1,0 +1,36 @@
+#include "hfilter.h"
+/*
+NTSTATUS zfilterHandleDeviceControlIrp(PDEVICE_OBJECT DeviceObject, PIRP Irp)
+{
+    zfilterDeviceExtensionStruct *zfilterDeviceExtension = NULL;
+    PIO_STACK_LOCATION currentIrpStack = IoGetCurrentIrpStackLocation(Irp);
+ 
+    if(currentIrpStack->Parameters.DeviceIoControl.IoControlCode==IOCTL_STORAGE_MANAGE_DATA_SET_ATTRIBUTES)
+    {
+        DEVICE_MANAGE_DATA_SET_ATTRIBUTES *dsa = NULL;
+        int status = 0;
+
+        dsa = (DEVICE_MANAGE_DATA_SET_ATTRIBUTES *) Irp->AssociatedIrp.SystemBuffer;
+
+        status = zfilterHandleDSMIOCTL(DeviceObject, Irp, dsa);
+
+        if(status==ZFILTER_COMPLETE_REQUEST)
+        {
+            zfilterDebugPrint("INFO: zfilterHandleDeviceControlIrp - complete IRP\n");
+            Irp->IoStatus.Status = STATUS_SUCCESS;
+            IoCompleteRequest(Irp, IO_NO_INCREMENT);
+            return STATUS_SUCCESS;
+        }
+        zfilterDebugPrint("INFO: zfilterHandleDeviceControlIrp - fwd IRP\n");
+    }
+
+
+    return zfilterSendIrpToNextDriver(DeviceObject, Irp);
+}
+
+NTSTATUS zfilterHandlePowerIrp(IN PDEVICE_OBJECT DeviceObject, IN PIRP Irp)
+{
+    return zfilterSendIrpToNextDriver(DeviceObject, Irp);
+}
+
+*/

@@ -1,0 +1,52 @@
+
+
+Device/volume info
+===================================================================
+    [physicaldrive1]
+
+
+Storage Adapter Info
+---------------------------------------------------------
+    Version:               00000020h
+    Size:                  00000020h
+    MaximumTransferLength: 00020000h (bytes)
+    MaximumPhysicalPages:  00000021h
+    TrueMaximumTransfer:   00020000h (bytes)
+    AlignmentMask:         00000001h
+    AdapterUsesPio:        False
+    AdapterScansDown:      False
+    CommandQueueing:       True
+    AcceleratedTransfer:   False
+    BusType:               00000003h (BusTypeAta)
+    BusMajorVersion:       00000001h
+    BusMinorVersion:       00000000h
+
+
+Storage Device Info
+---------------------------------------------------------
+    Version:               00000028h
+    Size:                  000000a7h
+    DeviceType:            00000000h (Direct access block device)
+    DeviceTypeModifier:    00000000h
+    RemovableMedia:        False
+    CommandQueueing:       False
+    VendorID:              
+    ProductID:             VMware Virtual IDE Hard Drive
+    ProductRevision:       00000001
+    SerialNumber:          3130303030303030303030303030303030303130
+    BusType:               00000003h (BusTypeAta)
+    RawPropertiesLength:   00000024h
+
+    Raw Properties
+  ===========================
+      00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F ASCII
+   0  00 00 00 00 00 00 00 02 20 00 00 00 56 4d 77 61 ............VMwa
+  10  72 65 20 56 69 72 74 75 61 6c 20 49 44 45 20 48 re.Virtual.IDE.H
+  20  61 72 64 20 30 30 30 30 56 4d 77 61 72 65 20 56 ard.0000VMware.V
+
+
+Storage Capacity Info
+---------------------------------------------------------
+    Bytes per block:       512
+    Number of blocks:      00000000575466f0h
+    Total size (bytes):    000000aea8cde000h

@@ -1,0 +1,13 @@
+TARGETNAME=hfilter
+TARGETTYPE=DRIVER
+
+
+INCLUDES=$DDK_INC_PATH
+
+SOURCES=../hfilter.c \
+        ../hfilterDeviceHandler.c \
+        ../hfilterIrpHandler.c \
+        ../hfilterDSM.c \
+        ../hfilterDeviceControl.c \
+        ../hfilter.rc
+

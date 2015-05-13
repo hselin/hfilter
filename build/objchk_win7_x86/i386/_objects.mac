@@ -1,0 +1,21 @@
+
+
+386_OBJECTS=\
+ $(OBJ_PATH)\$O\hfilter.obj \
+ $(OBJ_PATH)\$O\hfilterdevicehandler.obj \
+ $(OBJ_PATH)\$O\hfilterirphandler.obj \
+ $(OBJ_PATH)\$O\hfilterdsm.obj \
+ $(OBJ_PATH)\$O\hfilterdevicecontrol.obj \
+
+
+_RES_FILE=$(OBJ_PATH)\$O\hfilter.res
+
+
+
+# lowercased
+BASEDIR=c:\winddk\7600.16385.1
+OBJECT_ROOT=c:\winddk\7600.16385.1
+MAKEDIR_LOWERCASE=c:\projects\hfilter\hfilter\build
+OBJ_PATH=c:\projects\hfilter\hfilter\build
+CONCURRENT_MIDL=0
+CONCURRENT_MANIFEST_BUILD=0

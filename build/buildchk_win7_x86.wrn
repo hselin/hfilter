@@ -1,0 +1,9 @@
+1>warnings in directory c:\projects\hfilter\hfilter\build
+1>c:\projects\hfilter\hfilter\hfilterdevicehandler.c(522) : warning C4133: 'function' : incompatible types - from 'PSTORAGE_DEVICE_DESCRIPTOR *' to 'PSTORAGE_DESCRIPTOR_HEADER *'
+1>c:\projects\hfilter\hfilter\hfilterdevicehandler.c(707) : warning C4133: 'function' : incompatible types - from 'PSTORAGE_DEVICE_DESCRIPTOR *' to 'PSTORAGE_DESCRIPTOR_HEADER *'
+1>c:\projects\hfilter\hfilter\hfilterdevicehandler.c(782) : warning C4133: 'function' : incompatible types - from 'PSTORAGE_DEVICE_DESCRIPTOR *' to 'PSTORAGE_DESCRIPTOR_HEADER *'
+1>c:\projects\hfilter\hfilter\hfilterirphandler.c(674) : warning C4242: '=' : conversion from 'UINT64' to 'UINT32', possible loss of data
+1>c:\projects\hfilter\hfilter\hfilterirphandler.c(1090) : warning C4113: 'PIO_WORKITEM_ROUTINE' differs in parameter lists from 'PIO_WORKITEM_ROUTINE_EX'
+1>c:\projects\hfilter\hfilter\hfilterirphandler.c(1150) : warning C4242: '=' : conversion from 'UINT64' to 'ULONG', possible loss of data
+1>c:\projects\hfilter\hfilter\hfilterirphandler.c(1151) : warning C4242: '=' : conversion from 'UINT64' to 'ULONG', possible loss of data
+1>c:\projects\hfilter\hfilter\hfilterdevicecontrol.c(332) : warning C4716: 'hfilterSaveSubDeviceConfig' : must return a value

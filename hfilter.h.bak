@@ -1,0 +1,100 @@
+#pragma once
+#ifndef HFILTER_H
+#define HFILTER_H
+
+#include "Ntddk.h"
+#include "ntstatus.h"
+#include "ntddstor.h"
+#include "initguid.h"
+#include "ntddstor.h"
+#include "ntintsafe.h"
+#include "srb.h"
+#include "scsi.h"
+
+#define HFILTER_OK                 (0)
+
+#define HFILTER_COMPLETE_REQUEST   (1)
+#define HFILTER_FORWARD_REQUEST    (2)
+
+#define HFILTER_ERROR              (-1)
+
+DEFINE_GUID( FILE_TYPE_NOTIFICATION_GUID_PAGE_FILE,         0x0d0a64a1, 0x38fc, 0x4db8, 0x9f, 0xe7, 0x3f, 0x43, 0x52, 0xcd, 0x7c, 0x5c );
+DEFINE_GUID( FILE_TYPE_NOTIFICATION_GUID_HIBERNATION_FILE,  0xb7624d64, 0xb9a3, 0x4cf8, 0x80, 0x11, 0x5b, 0x86, 0xc9, 0x40, 0xe7, 0xb7 );
+DEFINE_GUID( FILE_TYPE_NOTIFICATION_GUID_CRASHDUMP_FILE,    0x9d453eb7, 0xd2a6, 0x4dbd, 0xa2, 0xe3, 0xfb, 0xd0, 0xed, 0x91, 0x09, 0xa9 );
+
+#define GET_BYTE(val, offset)                                   ((val >> (8 * offset)) & (0xFF))
+
+#define hfilterDebugPrint(...) DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_TRACE_LEVEL, __VA_ARGS__)
+
+#define HFILTER_MEMORY_POOL_ALLOC_TAG_1                       '1_FH'
+#define HFILTER_DEVICE_INQUIRY_COMMAND_TIMEOUT_VALUE          (60 * 1)
+
+#define HFILTER_MAX_SUB_DEVICE                                (2)
+
+
+typedef struct
+{
+    UINT64 startLBA;
+    UINT64 endLBA;
+} hfilterLBARange;
+
+typedef struct
+{
+  PDEVICE_OBJECT targetDeviceObject;  //next in line...
+} hfilterSubDeviceListStruct;
+
+
+
+typedef struct
+{
+    hfilterSubDeviceListStruct subDeviceList[HFILTER_MAX_SUB_DEVICE];
+} hfilterConfigurationStruct;
+
+
+typedef struct
+{
+    PDEVICE_OBJECT PDO;  //my pdo
+    PDEVICE_OBJECT targetDeviceObject;  //next in line...
+    PDEVICE_OBJECT hfilterDeviceObject; //my obj (DO)
+    INT32 subDeviceIndex;
+} hfilterDeviceExtensionStruct;
+
+
+
+
+
+
+typedef struct{
+    UCHAR opcode;
+    UCHAR EVPD                      : 1;
+    UCHAR obsolete                  : 1;
+    UCHAR reserved                  : 6;
+    UCHAR pageCode;
+    UCHAR allocationLength[2];
+    UCHAR control;
+} hfilterSCSIInquiry6CDBStruct;
+
+
+
+
+
+
+
+
+
+
+void hfilterPrintBuffer(char *title, unsigned char *buf, unsigned int length, int printHeader);
+void *hfilterMemoryAlloc(POOL_TYPE PoolType, SIZE_T NumberOfBytes);
+void hfilterMemoryFree(void *P);
+
+NTSTATUS hfilterSendIrpToNextDriver(IN PDEVICE_OBJECT DeviceObject, IN PIRP Irp);
+
+
+int hfilterAddSubDevice(hfilterDeviceExtensionStruct *hfilterDeviceExtension);
+
+//int hfilterHandleDSMIOCTL(PDEVICE_OBJECT DeviceObject, PIRP Irp, DEVICE_MANAGE_DATA_SET_ATTRIBUTES *dsa);
+
+__drv_dispatchType(IRP_MJ_DEVICE_CONTROL) DRIVER_DISPATCH hfilterHandleDeviceControlIrp;
+
+
+#endif

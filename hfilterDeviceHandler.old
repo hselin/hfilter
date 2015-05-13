@@ -1,0 +1,316 @@
+#include "hfilter.h"
+
+typedef struct{
+    PDEVICE_OBJECT targetDeviceObject;
+    SCSI_REQUEST_BLOCK srb;
+    UINT8 *dataTransferBuffer;
+    UINT32 dataTransferBufferSize;
+    UINT8 *senseDataBuffer;
+    UINT32 senseDataBufferSize;
+    KEVENT waitEvent;
+} hfilterDeviceInquiryCommandContextStruct;
+
+
+int hfilterSendDeviceInquiryCommand(hfilterDeviceExtensionStruct *hfilterDeviceExtension, hfilterDeviceInquiryCommandContextStruct *commandContext);
+int hfilterBuildDeviceInquirySRB(SCSI_REQUEST_BLOCK *srb, IRP *irp, hfilterDeviceInquiryCommandContextStruct *commandContext, hfilterDeviceExtensionStruct *hfilterDeviceExtension);
+void hfilterBuildDeviceInquiryCDB(UINT16 deviceInquiryDataBufferSize, UCHAR *cdb, UCHAR *cdbLength);
+int hfilterBuildDeviceInquiryIRP(IRP *irp, SCSI_REQUEST_BLOCK *srb, hfilterDeviceInquiryCommandContextStruct *commandContext);
+NTSTATUS hfilterDeviceInquiryCommandIrpCompletionCallback(PDEVICE_OBJECT DeviceObject, PIRP Irp, PVOID Context);
+
+extern hfilterConfigurationStruct *hfilterConfig;
+
+int hfilterAddSubDevice(hfilterDeviceExtensionStruct *hfilterDeviceExtension)
+{
+    hfilterDeviceInquiryCommandContextStruct *commandContext = NULL;
+    int returnStatus = HFILTER_OK;
+    int status = HFILTER_OK;
+
+    hfilterDebugPrint("INFO: hfilterAddSubDevice\n");
+
+    if(hfilterDeviceExtension==NULL)
+        return HFILTER_ERROR;
+
+    hfilterDeviceExtension->subDeviceIndex = HFILTER_INVALID_SUB_DEVICE_INDEX;
+
+
+    //allocate command context
+    commandContext = hfilterMemoryAlloc(NonPagedPool, sizeof(hfilterDeviceInquiryCommandContextStruct));
+
+    if(commandContext==NULL)
+    {
+        returnStatus = HFILTER_ERROR;
+        goto hfilterAddSubDevice_exit;
+    }
+    
+    memset(commandContext, 0, sizeof(hfilterDeviceInquiryCommandContextStruct));
+
+    //alloc data transfer buffer
+    commandContext->dataTransferBufferSize = INQUIRYDATABUFFERSIZE;
+    commandContext->dataTransferBuffer = hfilterMemoryAlloc(NonPagedPool, commandContext->dataTransferBufferSize);
+
+    if(commandContext->dataTransferBuffer==NULL)
+    {
+        returnStatus = HFILTER_ERROR;
+        goto hfilterAddSubDevice_exit;
+    }
+
+    memset(commandContext->dataTransferBuffer, 0, commandContext->dataTransferBufferSize);
+
+
+    //alloc sense data buffer
+    commandContext->senseDataBufferSize = SENSE_BUFFER_SIZE;
+    commandContext->senseDataBuffer = hfilterMemoryAlloc(NonPagedPool, commandContext->senseDataBufferSize);
+
+    if(commandContext->senseDataBuffer==NULL)
+    {
+        returnStatus = HFILTER_ERROR;
+        goto hfilterAddSubDevice_exit;
+    }
+
+    memset(commandContext->senseDataBuffer, 0, commandContext->senseDataBufferSize);
+
+    commandContext->targetDeviceObject = hfilterDeviceExtension->targetDeviceObject;
+
+
+    status = hfilterSendDeviceInquiryCommand(hfilterDeviceExtension, commandContext);
+
+    hfilterDebugPrint("INFO: hfilterAddSubDevice - hfilterSendDeviceInquiryCommand %d\n", status);
+
+    if(status==HFILTER_OK)
+    {
+        INQUIRYDATA *inquiryData = (INQUIRYDATA *)commandContext->dataTransferBuffer;
+        SCSI_REQUEST_BLOCK *srb = &commandContext->srb;
+
+
+        if(SRB_STATUS(srb->SrbStatus)==SRB_STATUS_SUCCESS)
+        {
+            hfilterDebugPrint("INFO: hfilterAddDeviceAsSubDevice - SRB_STATUS_SUCCESS\n");
+            hfilterDebugPrint("INFO: hfilterAddDeviceAsSubDevice - inquiryData->ProductId: [%s]\n", inquiryData->ProductId);
+
+            if(0)
+            {
+                hfilterConfig->subDeviceList[HFILTER_SSD_SUB_DEVICE_INDEX].targetDeviceObject = hfilterDeviceExtension->targetDeviceObject;
+                hfilterDeviceExtension->subDeviceIndex = HFILTER_SSD_SUB_DEVICE_INDEX;
+            }
+
+            if(0)
+            {
+                hfilterConfig->subDeviceList[HFILTER_HDD_SUB_DEVICE_INDEX].targetDeviceObject = hfilterDeviceExtension->targetDeviceObject;
+                hfilterDeviceExtension->subDeviceIndex = HFILTER_HDD_SUB_DEVICE_INDEX;
+            }
+
+        } else {
+            //hfilterHandleDeviceInquiryCommandFailed(srb, Irp, commandContext);
+            hfilterDebugPrint("ERROR: hfilterAddDeviceAsSubDevice - !SRB_STATUS_SUCCESS\n");
+			returnStatus = HFILTER_ERROR;
+			goto hfilterAddSubDevice_exit;
+        }
+
+    } else {
+        hfilterDebugPrint("ERROR: hfilterAddDeviceAsSubDevice - invalid status or commandContext\n");
+		returnStatus = HFILTER_ERROR;
+		goto hfilterAddSubDevice_exit;
+    }
+
+
+
+hfilterAddSubDevice_exit:
+
+    if(commandContext)
+    {
+        if(commandContext->dataTransferBuffer)
+            hfilterMemoryFree(commandContext->dataTransferBuffer);
+
+        if(commandContext->senseDataBuffer)
+            hfilterMemoryFree(commandContext->senseDataBuffer);
+
+        hfilterMemoryFree(commandContext);
+    }
+
+    return returnStatus;
+}
+
+
+int hfilterSendDeviceInquiryCommand(hfilterDeviceExtensionStruct *hfilterDeviceExtension, hfilterDeviceInquiryCommandContextStruct *commandContext)
+{
+    //hfilterDeviceInquiryCommandContextStruct *commandContext = NULL;
+    PIRP irp = NULL;
+    PSCSI_REQUEST_BLOCK srb = NULL;
+    NTSTATUS driverCallStatus = STATUS_SUCCESS;
+    //LARGE_INTEGER waitEventTimeout
+    int status = HFILTER_OK;
+
+    int returnStatus = HFILTER_OK;
+
+    if((hfilterDeviceExtension==NULL)||(commandContext==NULL))
+    {
+        returnStatus = HFILTER_ERROR;
+        goto hfilterSendDeviceInquiryCommand_exit;
+    }
+
+    //alloc irp
+    irp = IoAllocateIrp(commandContext->targetDeviceObject->StackSize, FALSE);
+
+    if(irp==NULL)
+    {
+        returnStatus = HFILTER_ERROR;
+        goto hfilterSendDeviceInquiryCommand_exit;
+    } else hfilterDebugPrint("INFO: hfilterSendDeviceInquiryCommand - IoAllocateIrp %p\n", irp);
+
+    srb = &commandContext->srb;
+
+    //setup SRB
+    status = hfilterBuildDeviceInquirySRB(srb, irp, commandContext, hfilterDeviceExtension);
+    
+    if(status!=HFILTER_OK)
+    {
+        returnStatus = HFILTER_ERROR;
+        goto hfilterSendDeviceInquiryCommand_exit;
+    }
+
+    //setup IRP
+    status = hfilterBuildDeviceInquiryIRP(irp, srb, commandContext);
+    
+    if(status!=HFILTER_OK)
+    {
+        returnStatus = HFILTER_ERROR;
+        goto hfilterSendDeviceInquiryCommand_exit;
+    }
+
+
+    KeInitializeEvent(&commandContext->waitEvent, SynchronizationEvent, FALSE);
+    //KeInitializeEvent(&commandContext->waitEvent, NotificationEvent, FALSE);
+
+
+    //send the irp on its way...
+    driverCallStatus = IoCallDriver(commandContext->targetDeviceObject, irp);
+
+    if (driverCallStatus == STATUS_PENDING){
+        hfilterDebugPrint("INFO: hfilterSendDeviceInquiryCommand - STATUS_PENDING\n");
+
+        // Wait on an event to be signaled
+        KeWaitForSingleObject(&commandContext->waitEvent, Executive, KernelMode, FALSE, NULL);
+
+        // Get the final status
+        driverCallStatus = irp->IoStatus.Status;
+    }
+
+    hfilterDebugPrint("INFO: hfilterSendDeviceInquiryCommand - driverCallStatus 0x%x\n", driverCallStatus);
+
+    if(!NT_SUCCESS(driverCallStatus)){
+        returnStatus = HFILTER_ERROR;
+    }
+
+hfilterSendDeviceInquiryCommand_exit:
+
+    //if(irp)
+        //IoFreeIrp(irp);
+
+    return returnStatus;
+}
+
+int hfilterBuildDeviceInquirySRB(SCSI_REQUEST_BLOCK *srb, IRP *irp, hfilterDeviceInquiryCommandContextStruct *commandContext, hfilterDeviceExtensionStruct *hfilterDeviceExtension)
+{
+
+    if((srb==NULL) || (irp==NULL) || (commandContext==NULL) || (hfilterDeviceExtension==NULL))
+    {
+        return HFILTER_ERROR;
+    }
+
+    memset(srb, 0, sizeof(SCSI_REQUEST_BLOCK));
+
+    srb->Length = sizeof(SCSI_REQUEST_BLOCK);
+    srb->Function = SRB_FUNCTION_EXECUTE_SCSI;
+
+    //Srb->QueueTag = SP_UNTAGGED;
+    srb->QueueAction = SRB_SIMPLE_TAG_REQUEST;
+
+
+    hfilterBuildDeviceInquiryCDB((UINT16) commandContext->dataTransferBufferSize, srb->Cdb, &srb->CdbLength);
+
+    srb->SrbFlags = SRB_FLAGS_DATA_IN | SRB_FLAGS_DISABLE_SYNCH_TRANSFER;
+    
+    srb->DataTransferLength = commandContext->dataTransferBufferSize;
+    srb->DataBuffer = commandContext->dataTransferBuffer;
+    
+    srb->SenseInfoBufferLength = commandContext->senseDataBufferSize;
+    srb->SenseInfoBuffer = commandContext->senseDataBuffer;
+
+    srb->TimeOutValue = HFILTER_DEVICE_INQUIRY_COMMAND_TIMEOUT_VALUE;
+    
+    srb->OriginalRequest = irp;
+
+    srb->QueueSortKey = (ULONG) 0x1;
+
+    
+    hfilterPrintBuffer("CDB", srb->Cdb, srb->CdbLength, 1);
+    
+    return HFILTER_OK;
+}
+
+void hfilterBuildDeviceInquiryCDB(UINT16 deviceInquiryDataBufferSize, UCHAR *cdb, UCHAR *cdbLength)
+{
+    hfilterSCSIInquiry6CDBStruct *inquiry6CDB = NULL;
+
+    inquiry6CDB = (hfilterSCSIInquiry6CDBStruct *) cdb;
+    
+    inquiry6CDB->opcode = SCSIOP_INQUIRY;
+
+    inquiry6CDB->EVPD = 0;
+    inquiry6CDB->pageCode = 0;
+
+
+    inquiry6CDB->allocationLength[0] = GET_BYTE(deviceInquiryDataBufferSize, 1); //(MSB)
+    inquiry6CDB->allocationLength[1] = GET_BYTE(deviceInquiryDataBufferSize, 0); //LSB
+
+    *cdbLength = 6;
+}
+
+int hfilterBuildDeviceInquiryIRP(IRP *irp, SCSI_REQUEST_BLOCK *srb, hfilterDeviceInquiryCommandContextStruct *commandContext)
+{
+    PIO_STACK_LOCATION irpStack = NULL;
+
+    if((irp==NULL) || (srb==NULL) || (commandContext==NULL))
+    {
+        return HFILTER_ERROR;
+    }
+
+    irpStack = IoGetNextIrpStackLocation(irp);
+
+    if(irpStack==NULL)
+    {
+        return HFILTER_ERROR;
+    }
+
+    irpStack->MajorFunction = IRP_MJ_SCSI;
+    irpStack->Parameters.Scsi.Srb = srb;
+
+    IoSetCompletionRoutine(irp, (PIO_COMPLETION_ROUTINE)hfilterDeviceInquiryCommandIrpCompletionCallback, commandContext, TRUE, TRUE, TRUE);
+
+    return HFILTER_OK;
+}
+
+NTSTATUS hfilterDeviceInquiryCommandIrpCompletionCallback(PDEVICE_OBJECT DeviceObject, PIRP Irp, PVOID Context)
+{
+    hfilterDeviceInquiryCommandContextStruct *commandContext = NULL;
+    
+    hfilterDebugPrint("INFO: hfilterDeviceInquiryCommandIrpCompletionCallback\n");
+
+    if((Irp==NULL) || (Context==NULL))
+    {
+  	    //always return STATUS_MORE_PROCESSING_REQUIRED to terminate the completion processing of the IRP.
+  	    return STATUS_MORE_PROCESSING_REQUIRED;
+    }
+
+    commandContext = (hfilterDeviceInquiryCommandContextStruct *) Context;
+
+    if(Irp->PendingReturned){
+        hfilterDebugPrint("INFO: hfilterDeviceInquiryCommandIrpCompletionCallback - KeSetEvent\n");
+        //release waiting thread
+        KeSetEvent(&commandContext->waitEvent, IO_NO_INCREMENT, FALSE);
+    }
+
+
+  	//always return STATUS_MORE_PROCESSING_REQUIRED to terminate the completion processing of the IRP.
+  	return STATUS_MORE_PROCESSING_REQUIRED;
+}
